@@ -116,6 +116,14 @@ function ObjectFile:new(obj)
     return obj
 end
 
+local function shallow_clone_list(t)
+    local r = {}
+    for _, e in ipairs(t) do
+        table.insert(r, e)
+    end
+    return r
+end
+
 ---@param ctx Context
 function ObjectFile:build(ctx)
     local selected_toolchain = require 'yabt_cc_rules.toolchain'.selected_toolchain()
@@ -124,7 +132,7 @@ function ObjectFile:build(ctx)
     local language = file_extension_to_language(self.src:ext())
     local build_rule = build_rule_for_language_and_toolchain(language, toolchain)
 
-    local flags = self[lang_to_flag_member[language]] or {}
+    local flags = shallow_clone_list(self[lang_to_flag_member[language]] or {})
     if self.includes ~= nil then
         for _, inc in ipairs(self.includes) do
             table.insert(flags, '-I' .. inc:absolute())
@@ -220,7 +228,7 @@ function Library:resolve()
     self.toolchain = self.toolchain or selected_toolchain
     local dep_libs = collect_deps_recursively(self.toolchain, self.deps, self.toolchain.stddeps)
 
-    self.includes = self.includes or {}
+    self.includes = shallow_clone_list(self.includes or {})
 
     local function add_include(include)
         if not utils.table_contains(self.includes, include) then
