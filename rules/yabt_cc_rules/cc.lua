@@ -31,6 +31,9 @@ local function cxx_rule_for_toolchain(toolchain)
         cmd = toolchain.cxxcompiler ..
             ' -c ' .. table.concat(toolchain.cxxflags, ' ') .. ' $flags -o $out ' .. '-MD -MF $out.d -pipe $in',
         descr = 'CXX (toolchain: ' .. toolchain.name .. ') $out',
+        variables ={
+            depfile = '$out.d',
+        },
         compdb = true, -- This rule is part of the compilation database output
     }
 end
@@ -43,6 +46,9 @@ local function c_rule_for_toolchain(toolchain)
         cmd = toolchain.ccompiler ..
             ' -c ' .. table.concat(toolchain.cflags, ' ') .. ' $flags -o $out ' .. '-MD -MF $out.d -pipe $in',
         descr = 'C (toolchain: ' .. toolchain.name .. ') $out',
+        variables ={
+            depfile = '$out.d',
+        },
         compdb = true, -- This rule is part of the compilation database output
     }
 end
@@ -55,6 +61,9 @@ local function asm_rule_for_toolchain(toolchain)
         cmd = toolchain.assembler ..
             ' -c ' .. table.concat(toolchain.asflags, ' ') .. ' $flags -o $out ' .. '-MD -MF $out.d -pipe $in',
         descr = 'ASM (toolchain: ' .. toolchain.name .. ') $out',
+        variables ={
+            depfile = '$out.d',
+        },
         compdb = true, -- This rule is part of the compilation database output
     }
 end
