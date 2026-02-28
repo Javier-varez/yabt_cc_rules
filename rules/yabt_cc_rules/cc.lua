@@ -192,7 +192,7 @@ local function collect_deps_recursively(toolchain, deps, stddeps)
             return
         end
 
-        table.insert(all_deps, 1, lib)
+        table.insert(all_deps, lib)
 
         contained[libpath] = 'inprogress'
 
