@@ -164,12 +164,8 @@ function Library:new(lib)
     lib.module_path = path.InPath:new_relative(MODULE_PATH .. '/include')
     setmetatable(lib, self)
     self.__index = self
+    lib:resolve()
     return lib
-end
-
----@return Library
-function Library:cc_library()
-    return self
 end
 
 ---@param deps Dep[]
@@ -218,17 +214,17 @@ local function collect_deps_recursively(toolchain, deps, stddeps)
     return all_deps
 end
 
----@param ctx Context
-function Library:build(ctx)
+-- Resolves the missing library bits at lib declaration time
+function Library:resolve()
     local selected_toolchain = require 'yabt_cc_rules.toolchain'.selected_toolchain()
-    local toolchain = self.toolchain or selected_toolchain
-    local dep_libs = collect_deps_recursively(toolchain, self.deps, toolchain.stddeps)
+    self.toolchain = self.toolchain or selected_toolchain
+    local dep_libs = collect_deps_recursively(self.toolchain, self.deps, self.toolchain.stddeps)
 
-    local includes = self.includes or {}
+    self.includes = self.includes or {}
 
     local function add_include(include)
-        if not utils.table_contains(includes, include) then
-            table.insert(includes, include)
+        if not utils.table_contains(self.includes, include) then
+            table.insert(self.includes, include)
         end
     end
 
@@ -244,13 +240,21 @@ function Library:build(ctx)
     for _, lib in ipairs(dep_libs) do
         add_includes(lib.includes)
     end
+end
 
+---@return Library
+function Library:cc_library()
+    return self
+end
+
+---@param ctx Context
+function Library:build(ctx)
     local objs = {}
     for _, src in ipairs(self.srcs) do
         local obj = ObjectFile:new({
             out = src:withExt('o'),
             src = src,
-            includes = includes,
+            includes = self.includes,
             cxxflags = self.cxxflags,
             cflags = self.cflags,
             asflags = self.asflags,
@@ -260,7 +264,7 @@ function Library:build(ctx)
         table.insert(objs, obj.out)
     end
 
-    local build_rule = ar_rule_for_toolchain(toolchain)
+    local build_rule = ar_rule_for_toolchain(self.toolchain)
     local build_step = {
         outs = { self.out },
         ins = objs,
@@ -283,12 +287,41 @@ end
 ---@field private module_path ?Path
 local Binary = {}
 
----@param lib Binary
-function Binary:new(lib)
-    lib.module_path = path.InPath:new_relative(MODULE_PATH .. '/include')
-    setmetatable(lib, self)
+---@param bin Binary
+function Binary:new(bin)
+    bin.module_path = path.InPath:new_relative(MODULE_PATH .. '/include')
+    setmetatable(bin, self)
     self.__index = self
-    return lib
+    bin:resolve()
+    return bin
+end
+
+-- Resolves the missing library bits at lib declaration time
+function Binary:resolve()
+    local selected_toolchain = require 'yabt_cc_rules.toolchain'.selected_toolchain()
+    self.toolchain = self.toolchain or selected_toolchain
+    local dep_libs = collect_deps_recursively(self.toolchain, self.deps, self.toolchain.stddeps)
+
+    self.includes = self.includes or {}
+
+    local function add_include(include)
+        if not utils.table_contains(self.includes, include) then
+            table.insert(self.includes, include)
+        end
+    end
+
+    local function add_includes(more)
+        if more == nil then return end
+        for _, include in ipairs(more) do
+            add_include(include)
+        end
+    end
+
+    add_include(self.module_path)
+
+    for _, lib in ipairs(dep_libs) do
+        add_includes(lib.includes)
+    end
 end
 
 ---@param ctx Context
