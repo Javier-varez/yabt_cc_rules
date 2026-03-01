@@ -3,6 +3,61 @@ local M = {}
 local path = require 'yabt.core.path'
 local utils = require 'yabt.core.utils'
 
+local function validate_table(t, config)
+    config.error_level = config.error_level or 1
+    config.validate_entry = config.validate_entry or function(_, _) end
+    config.allow_nil = config.allow_nil or false
+    if t == nil and config.allow_nil then
+        return
+    end
+    if type(t) ~= 'table' then
+        error('Expected table', config.error_level)
+    end
+
+    for _, entry in ipairs(t) do
+        config.validate_entry(entry, config.error_level + 1)
+    end
+end
+
+local function validate_out_path(p, error_level)
+    if type(p) ~= 'table' then
+        error('Expected out path but got ' .. type(p), error_level)
+    end
+    if getmetatable(p) ~= path.OutPath then
+        error('Expected out path but got ' .. type(p), error_level)
+    end
+end
+
+local function validate_path(p, error_level)
+    if type(p) ~= 'table' then
+        error('Expected path but got ' .. type(p), error_level)
+    end
+    if getmetatable(p) ~= path.InPath and getmetatable(p) ~= path.OutPath then
+        error('Expected path but got ' .. type(p), error_level)
+    end
+end
+
+local function validate_dep(dep, error_level)
+    if type(dep) ~= 'table' then
+        error('Expected Dep but got ' .. type(dep), error_level)
+    end
+    if type(dep.cc_library) ~= 'function' then
+        error('Expected Dep but got ' .. type(dep), error_level)
+    end
+end
+
+local function validate_string(s, error_level)
+    if type(s) ~= 'string' then
+        error('Expected string but got ' .. type(s), error_level)
+    end
+end
+
+local function validate_boolean_or_nil(s, error_level)
+    if type(s) ~= 'boolean' and type(s) ~= 'nil' then
+        error('Expected boolean or nil but got ' .. type(s), error_level)
+    end
+end
+
 local fileExtToLangMap = {
     ['cc'] = 'C++',
     ['cpp'] = 'C++',
@@ -15,7 +70,11 @@ local fileExtToLangMap = {
 }
 
 ---@param ext string
-local function file_extension_to_language(ext)
+local function file_path_to_language(path)
+    local ext = path:ext()
+    if ext == nil then
+        error('Source path does not have an extension: ' .. path:absolute())
+    end
     local lang = fileExtToLangMap[ext]
     if lang == nil then
         error('Unknown language for extension ' .. ext)
@@ -31,7 +90,7 @@ local function cxx_rule_for_toolchain(toolchain)
         cmd = toolchain.cxxcompiler ..
             ' -c ' .. table.concat(toolchain.cxxflags, ' ') .. ' $flags -o $out ' .. '-MD -MF $out.d -pipe $in',
         descr = 'CXX (toolchain: ' .. toolchain.name .. ') $out',
-        variables ={
+        variables = {
             depfile = '$out.d',
         },
         compdb = true, -- This rule is part of the compilation database output
@@ -46,7 +105,7 @@ local function c_rule_for_toolchain(toolchain)
         cmd = toolchain.ccompiler ..
             ' -c ' .. table.concat(toolchain.cflags, ' ') .. ' $flags -o $out ' .. '-MD -MF $out.d -pipe $in',
         descr = 'C (toolchain: ' .. toolchain.name .. ') $out',
-        variables ={
+        variables = {
             depfile = '$out.d',
         },
         compdb = true, -- This rule is part of the compilation database output
@@ -61,7 +120,7 @@ local function asm_rule_for_toolchain(toolchain)
         cmd = toolchain.assembler ..
             ' -c ' .. table.concat(toolchain.asflags, ' ') .. ' $flags -o $out ' .. '-MD -MF $out.d -pipe $in',
         descr = 'ASM (toolchain: ' .. toolchain.name .. ') $out',
-        variables ={
+        variables = {
             depfile = '$out.d',
         },
         compdb = true, -- This rule is part of the compilation database output
@@ -122,7 +181,40 @@ local lang_to_flag_member = {
 local ObjectFile = {}
 
 ---@param obj ObjectFile
+local function validate_object_input(obj)
+    if not type(obj) == 'table' then
+        error('ObjectFile:new takes a table as input', 3)
+    end
+
+    local error_level = 4
+    validate_out_path(obj.out, error_level)
+    validate_path(obj.src, error_level)
+    validate_table(obj.includes, {
+        validate_entry = validate_path,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    validate_table(obj.cflags, {
+        validate_entry = validate_string,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    validate_table(obj.cxxflags, {
+        validate_entry = validate_string,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    validate_table(obj.asflags, {
+        validate_entry = validate_string,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    -- FIXME: Validate toolchain
+end
+
+---@param obj ObjectFile
 function ObjectFile:new(obj)
+    validate_object_input(obj)
     setmetatable(obj, self)
     self.__index = self
     return obj
@@ -141,7 +233,7 @@ function ObjectFile:build(ctx)
     local selected_toolchain = require 'yabt_cc_rules.toolchain'.selected_toolchain()
     local toolchain = self.toolchain or selected_toolchain
 
-    local language = file_extension_to_language(self.src:ext())
+    local language = file_path_to_language(self.src)
     local build_rule = build_rule_for_language_and_toolchain(language, toolchain)
 
     local flags = shallow_clone_list(self[lang_to_flag_member[language]] or {})
@@ -180,7 +272,50 @@ end
 local Library = {}
 
 ---@param lib Library
+local function validate_lib_input(lib)
+    if not type(lib) == 'table' then
+        error('Library:new takes a table as input', 3)
+    end
+
+    local error_level = 4
+    validate_out_path(lib.out, error_level)
+    validate_table(lib.srcs, {
+        validate_entry = validate_path,
+        error_level = error_level,
+        allow_nil = false,
+    })
+    validate_table(lib.deps, {
+        validate_entry = validate_dep,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    validate_table(lib.includes, {
+        validate_entry = validate_path,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    validate_table(lib.cflags, {
+        validate_entry = validate_string,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    validate_table(lib.cxxflags, {
+        validate_entry = validate_string,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    validate_table(lib.asflags, {
+        validate_entry = validate_string,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    -- FIXME: Validate toolchain
+    validate_boolean_or_nil(lib.always_link, error_level)
+end
+
+---@param lib Library
 function Library:new(lib)
+    validate_lib_input(lib)
     lib.module_path = path.InPath:new_relative(MODULE_PATH .. '/include')
     setmetatable(lib, self)
     self.__index = self
@@ -308,7 +443,59 @@ end
 local Binary = {}
 
 ---@param bin Binary
+local function validate_bin_input(bin)
+    if not type(bin) == 'table' then
+        error('Library:new takes a table as input', 3)
+    end
+
+    local error_level = 4
+    validate_out_path(bin.out, error_level)
+    validate_table(bin.srcs, {
+        validate_entry = validate_path,
+        error_level = error_level,
+        allow_nil = false,
+    })
+    validate_table(bin.deps, {
+        validate_entry = validate_dep,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    validate_table(bin.includes, {
+        validate_entry = validate_path,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    validate_table(bin.cflags, {
+        validate_entry = validate_string,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    validate_table(bin.cxxflags, {
+        validate_entry = validate_string,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    validate_table(bin.asflags, {
+        validate_entry = validate_string,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    validate_table(bin.ldflags, {
+        validate_entry = validate_string,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    validate_table(bin.ldflags_post, {
+        validate_entry = validate_string,
+        error_level = error_level,
+        allow_nil = true,
+    })
+    -- FIXME: Validate toolchain
+end
+
+---@param bin Binary
 function Binary:new(bin)
+    validate_bin_input(bin)
     bin.module_path = path.InPath:new_relative(MODULE_PATH .. '/include')
     setmetatable(bin, self)
     self.__index = self
