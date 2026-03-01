@@ -20,19 +20,13 @@ local function validate_table(t, config)
 end
 
 local function validate_out_path(p, error_level)
-    if type(p) ~= 'table' then
-        error('Expected out path but got ' .. type(p), error_level)
-    end
-    if getmetatable(p) ~= path.OutPath then
+    if not path.is_out_path(p) then
         error('Expected out path but got ' .. type(p), error_level)
     end
 end
 
 local function validate_path(p, error_level)
-    if type(p) ~= 'table' then
-        error('Expected path but got ' .. type(p), error_level)
-    end
-    if getmetatable(p) ~= path.InPath and getmetatable(p) ~= path.OutPath then
+    if not path.is_path(p) then
         error('Expected path but got ' .. type(p), error_level)
     end
 end
@@ -59,14 +53,14 @@ local function validate_boolean_or_nil(s, error_level)
 end
 
 local fileExtToLangMap = {
-    ['cc'] = 'C++',
-    ['cpp'] = 'C++',
-    ['hh'] = 'C++',
-    ['hpp'] = 'C++',
-    ['c'] = 'C',
-    ['h'] = 'C',
-    ['s'] = 'Asm',
-    ['S'] = 'Asm',
+    ['.cc'] = 'C++',
+    ['.cpp'] = 'C++',
+    ['.hh'] = 'C++',
+    ['.hpp'] = 'C++',
+    ['.c'] = 'C',
+    ['.h'] = 'C',
+    ['.s'] = 'Asm',
+    ['.S'] = 'Asm',
 }
 
 ---@param ext string
@@ -407,7 +401,7 @@ function Library:build(ctx)
     local objs = {}
     for _, src in ipairs(self.srcs) do
         local obj = ObjectFile:new({
-            out = src:withExt('o'),
+            out = src:with_ext('o'),
             src = src,
             includes = self.includes,
             cxxflags = self.cxxflags,
@@ -561,7 +555,7 @@ function Binary:build(ctx)
     local objs = {}
     for _, src in ipairs(self.srcs) do
         local obj = ObjectFile:new({
-            out = src:withExt('o'),
+            out = src:with_ext('o'),
             src = src,
             includes = includes,
             cxxflags = self.cxxflags,
