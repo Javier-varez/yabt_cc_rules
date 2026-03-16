@@ -9,6 +9,7 @@ local M = {
 ---@field assembler string
 ---@field archiver string
 ---@field linker string
+---@field raw_linker string
 ---@field cflags string[]
 ---@field cxxflags string[]
 ---@field asflags string[]

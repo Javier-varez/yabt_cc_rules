@@ -255,6 +255,7 @@ end
 ---@class Library
 ---@field out OutPath
 ---@field srcs ?Path[]
+---@field objs ?Path[]
 ---@field deps ?Dep[]
 ---@field includes ?Path[]
 ---@field cflags ?string[]
@@ -276,7 +277,12 @@ local function validate_lib_input(lib)
     validate_table(lib.srcs, {
         validate_entry = validate_path,
         error_level = error_level,
-        allow_nil = false,
+        allow_nil = true,
+    })
+    validate_table(lib.objs, {
+        validate_entry = validate_path,
+        error_level = error_level,
+        allow_nil = true,
     })
     validate_table(lib.deps, {
         validate_entry = validate_dep,
@@ -365,6 +371,9 @@ end
 
 -- Resolves the missing library bits at lib declaration time
 function Library:resolve()
+    self.srcs = self.srcs or {}
+    self.objs = self.objs or {}
+
     local selected_toolchain = require 'yabt_cc_rules.toolchain'.selected_toolchain()
     self.toolchain = self.toolchain or selected_toolchain
     local dep_libs = collect_deps_recursively(self.toolchain, self.deps, self.toolchain.stddeps)
@@ -412,6 +421,9 @@ function Library:build(ctx)
         obj:build(ctx)
         table.insert(objs, obj.out)
     end
+    for _, obj in ipairs(self.objs) do
+        table.insert(objs, obj)
+    end
 
     local build_rule = ar_rule_for_toolchain(self.toolchain)
     local build_step = {
@@ -439,7 +451,7 @@ local Binary = {}
 ---@param bin Binary
 local function validate_bin_input(bin)
     if not type(bin) == 'table' then
-        error('Library:new takes a table as input', 3)
+        error('Binary:new takes a table as input', 3)
     end
 
     local error_level = 4
@@ -497,7 +509,7 @@ function Binary:new(bin)
     return bin
 end
 
--- Resolves the missing library bits at lib declaration time
+-- Resolves the missing binary bits at lib declaration time
 function Binary:resolve()
     local selected_toolchain = require 'yabt_cc_rules.toolchain'.selected_toolchain()
     self.toolchain = self.toolchain or selected_toolchain
