@@ -618,6 +618,14 @@ function Binary:build(ctx)
     ctx.add_build_step_with_rule(build_step, build_rule)
 end
 
+function Binary:run(args)
+    local result = { self.out:absolute() }
+    for _, arg in ipairs(args or {}) do
+        table.insert(result, arg)
+    end
+    return result
+end
+
 M.ObjectFile = ObjectFile
 M.Library = Library
 M.Binary = Binary
