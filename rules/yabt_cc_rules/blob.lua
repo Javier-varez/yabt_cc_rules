@@ -10,7 +10,7 @@ local function blob_rule_for_toolchain(toolchain)
     return {
         name = toolchain.name .. '-blob',
         cmd = 'cd $base && ' .. toolchain.raw_linker ..
-            ' -z noexecstack -m elf_$arch -r -b binary -o $out $inp',
+            ' -z noexecstack -m $machine -r -b binary -o $out $inp',
         descr = 'LD (toolchain: ' .. toolchain.name .. ') $out',
     }
 end
@@ -61,6 +61,16 @@ function Blob:resolve()
     }
 end
 
+local function machine_to_ld_emulation_mode(machine)
+    if machine == 'x86_64' then
+        return 'elf_x86_64'
+    elseif machine == 'aarch64' then
+        return 'aarch64linux'
+    else
+        error('Unsupported machine architecture: ' .. machine)
+    end
+end
+
 function Blob:build(ctx)
     local build_rule = blob_rule_for_toolchain(self.toolchain)
     local build_step = {
@@ -68,7 +78,7 @@ function Blob:build(ctx)
         ins = { self.inp },
         rule_name = build_rule.name,
         variables = {
-            arch = 'x86_64',
+            machine = machine_to_ld_emulation_mode(self.toolchain.machine),
             base = self.base:absolute(),
             inp = self.inp:relative_to(self.base),
         }

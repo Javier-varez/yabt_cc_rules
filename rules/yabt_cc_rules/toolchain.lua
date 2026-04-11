@@ -10,6 +10,7 @@ local M = {
 ---@field archiver string
 ---@field linker string
 ---@field raw_linker string
+---@field machine string
 ---@field cflags string[]
 ---@field cxxflags string[]
 ---@field asflags string[]
