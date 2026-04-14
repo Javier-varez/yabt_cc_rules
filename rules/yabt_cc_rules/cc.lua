@@ -252,7 +252,7 @@ end
 ---@class Dep
 ---@field cc_library fun(self: Dep, toolchain: Toolchain): Library
 
----@class Library
+---@class CcLibrary
 ---@field out OutPath
 ---@field srcs ?Path[]
 ---@field objs ?Path[]
@@ -266,7 +266,7 @@ end
 ---@field private module_path ?Path
 local Library = {}
 
----@param lib Library
+---@param lib CcLibrary
 local function validate_lib_input(lib)
     if not type(lib) == 'table' then
         error('Library:new takes a table as input', 3)
@@ -313,7 +313,7 @@ local function validate_lib_input(lib)
     validate_boolean_or_nil(lib.always_link, error_level)
 end
 
----@param lib Library
+---@param lib CcLibrary
 function Library:new(lib)
     validate_lib_input(lib)
     lib.module_path = path.InPath:new_relative(MODULE_PATH .. '/include')
@@ -326,7 +326,7 @@ end
 ---@param deps Dep[]
 ---@param stddeps Dep[]
 ---@param toolchain Toolchain
----@return Library[]
+---@return CcLibrary[]
 local function collect_deps_recursively(toolchain, deps, stddeps)
     local all_deps = {}
     local contained = {}
@@ -400,7 +400,7 @@ function Library:resolve()
     end
 end
 
----@return Library
+---@return CcLibrary
 function Library:cc_library()
     return self
 end
@@ -425,7 +425,9 @@ function Library:build(ctx)
         table.insert(objs, obj)
     end
 
+    ---@type BuildRule
     local build_rule = ar_rule_for_toolchain(self.toolchain)
+    ---@type BuildStepWithRule
     local build_step = {
         outs = { self.out },
         ins = objs,
@@ -434,7 +436,7 @@ function Library:build(ctx)
     ctx.add_build_step_with_rule(build_step, build_rule)
 end
 
----@class Binary
+---@class CcBinary
 ---@field out OutPath
 ---@field srcs ?Path[]
 ---@field deps ?Dep[]
@@ -448,7 +450,7 @@ end
 ---@field private module_path ?Path
 local Binary = {}
 
----@param bin Binary
+---@param bin CcBinary
 local function validate_bin_input(bin)
     if not type(bin) == 'table' then
         error('Binary:new takes a table as input', 3)
@@ -499,7 +501,7 @@ local function validate_bin_input(bin)
     -- FIXME: Validate toolchain
 end
 
----@param bin Binary
+---@param bin CcBinary
 function Binary:new(bin)
     validate_bin_input(bin)
     bin.module_path = path.InPath:new_relative(MODULE_PATH .. '/include')
@@ -604,6 +606,7 @@ function Binary:build(ctx)
     end
 
     local build_rule = ld_rule_for_toolchain(toolchain)
+    ---@type BuildStepWithRule
     local build_step = {
         outs = { self.out },
         ins = ins,
@@ -618,6 +621,7 @@ function Binary:build(ctx)
     ctx.add_build_step_with_rule(build_step, build_rule)
 end
 
+---@param args string[]
 function Binary:run(args)
     local result = { self.out:absolute() }
     for _, arg in ipairs(args or {}) do
